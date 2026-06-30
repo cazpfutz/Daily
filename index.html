@@ -2,65 +2,531 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Checklist Diário</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1b1f23">
+<title>Rotina</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
-body{font-family:Arial,sans-serif;background:#f4f6f8;margin:0;padding:20px;color:#222}
-.card{max-width:700px;margin:auto;background:white;border-radius:20px;padding:20px;box-shadow:0 4px 20px rgba(0,0,0,.1)}
-h1{text-align:center}
-.item{display:flex;gap:10px;padding:10px;border-bottom:1px solid #eee}
-.time{width:70px;color:#666}
-.progress{height:24px;background:#ddd;border-radius:20px;overflow:hidden;margin:15px 0}
-.bar{height:100%;width:0;background:#4caf50;transition:.3s}
-.buttons{display:flex;gap:10px}
-button{flex:1;padding:12px;border:none;border-radius:12px;cursor:pointer}
-.reset{background:#e74c3c;color:white}
+  :root{
+    --bg:#13161a;
+    --card:#1b1f23;
+    --card-2:#21262c;
+    --line:#2a2f36;
+    --text:#eef0f2;
+    --text-dim:#8b929b;
+    --accent:#5ee0a0;
+    --accent-dim:#3a8a64;
+    --warn:#e0735e;
+    --radius:18px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .topbar{
+    position:sticky; top:0; z-index:10;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:calc(env(safe-area-inset-top) + 14px) 18px 12px;
+    background:linear-gradient(180deg, var(--bg) 70%, transparent);
+  }
+  .topbar h1{
+    font-size:17px; font-weight:700; letter-spacing:.2px; margin:0;
+    display:flex; align-items:center; gap:8px;
+  }
+  .topbar .date{font-size:12px; color:var(--text-dim); font-weight:500;}
+  .tabs{
+    display:flex; gap:6px; background:var(--card-2);
+    border-radius:12px; padding:3px; margin:0 18px 14px;
+  }
+  .tab{
+    flex:1; text-align:center; padding:9px 0; border-radius:9px;
+    font-size:13px; font-weight:600; color:var(--text-dim);
+    cursor:pointer; transition:.18s;
+    user-select:none;
+  }
+  .tab.active{background:var(--card); color:var(--text);}
+
+  .screen{display:none; padding:0 18px 110px;}
+  .screen.active{display:block;}
+
+  /* ---- CHECKLIST ---- */
+  .progress-wrap{margin:6px 0 18px;}
+  .progress-row{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;}
+  .progress-pct{font-size:28px; font-weight:800; letter-spacing:-.5px;}
+  .progress-label{font-size:12px; color:var(--text-dim); font-weight:500;}
+  .progress-bar{height:10px; background:var(--card-2); border-radius:20px; overflow:hidden;}
+  .progress-fill{height:100%; width:0%; background:linear-gradient(90deg,var(--accent-dim),var(--accent)); transition:width .35s ease; border-radius:20px;}
+
+  .group-label{
+    font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--text-dim); margin:22px 2px 8px; font-weight:700;
+  }
+  .item{
+    display:flex; align-items:center; gap:12px;
+    background:var(--card); border-radius:14px;
+    padding:13px 14px; margin-bottom:8px;
+    border:1px solid var(--line);
+    transition:.15s;
+  }
+  .item.done{opacity:.5;}
+  .item .time{
+    font-size:12px; color:var(--text-dim); font-weight:600;
+    width:42px; flex-shrink:0; font-variant-numeric:tabular-nums;
+  }
+  .item .label{flex:1; font-size:15px;}
+  .item.done .label{text-decoration:line-through; text-decoration-color:var(--text-dim);}
+  .checkbox{
+    width:24px; height:24px; border-radius:7px;
+    border:2px solid var(--line); flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:.15s;
+  }
+  .checkbox.checked{background:var(--accent); border-color:var(--accent);}
+  .checkbox svg{width:14px; height:14px; opacity:0; transition:.15s; stroke:#0c1410;}
+  .checkbox.checked svg{opacity:1;}
+
+  .finish-btn{
+    position:fixed; left:0; right:0; bottom:0;
+    padding:14px 18px calc(16px + env(safe-area-inset-bottom));
+    background:linear-gradient(180deg, transparent, var(--bg) 30%);
+  }
+  .finish-btn button{
+    width:100%; padding:16px; border:none; border-radius:16px;
+    font-size:15px; font-weight:700; cursor:pointer;
+    background:var(--accent); color:#0c1410;
+    transition:.15s;
+  }
+  .finish-btn button:active{transform:scale(.98);}
+  .finish-btn button.done-today{background:var(--card-2); color:var(--text-dim); border:1px solid var(--line);}
+
+  /* ---- STATS ---- */
+  .stat-section{margin-top:8px;}
+  .stat-cards{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:24px;}
+  .stat-card{
+    background:var(--card); border:1px solid var(--line);
+    border-radius:14px; padding:14px;
+  }
+  .stat-card .num{font-size:24px; font-weight:800; letter-spacing:-.5px;}
+  .stat-card .lbl{font-size:11px; color:var(--text-dim); margin-top:2px; font-weight:600;}
+
+  .week-row{display:flex; gap:6px; margin-bottom:26px;}
+  .day-col{flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;}
+  .day-bar-track{
+    width:100%; height:90px; background:var(--card-2); border-radius:8px;
+    display:flex; align-items:flex-end; overflow:hidden; position:relative;
+  }
+  .day-bar-fill{width:100%; background:var(--accent); border-radius:8px 8px 0 0; transition:height .3s;}
+  .day-bar-fill.empty{background:var(--line);}
+  .day-name{font-size:10px; color:var(--text-dim); font-weight:700;}
+  .day-pct{font-size:10px; color:var(--text-dim);}
+
+  .rank-title{
+    font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+    color:var(--text-dim); margin:0 2px 10px; font-weight:700;
+  }
+  .rank-item{
+    display:flex; align-items:center; gap:10px;
+    padding:10px 0; border-bottom:1px solid var(--line);
+  }
+  .rank-item:last-child{border-bottom:none;}
+  .rank-item .rlabel{flex:1; font-size:14px;}
+  .rank-item .rbar-track{width:70px; height:6px; background:var(--card-2); border-radius:10px; overflow:hidden;}
+  .rank-item .rbar-fill{height:100%; border-radius:10px;}
+  .rank-item.good .rbar-fill{background:var(--accent);}
+  .rank-item.bad .rbar-fill{background:var(--warn);}
+  .rank-item .rpct{font-size:12px; color:var(--text-dim); width:34px; text-align:right; font-variant-numeric:tabular-nums;}
+
+  .empty-state{
+    text-align:center; padding:50px 20px; color:var(--text-dim);
+  }
+  .empty-state .emoji{font-size:36px; margin-bottom:10px; display:block;}
+  .empty-state p{font-size:14px; line-height:1.5; margin:0;}
+
+  .toast{
+    position:fixed; left:50%; bottom:30px; transform:translateX(-50%) translateY(20px);
+    background:var(--card-2); border:1px solid var(--line);
+    padding:12px 20px; border-radius:14px; font-size:13px; font-weight:600;
+    opacity:0; pointer-events:none; transition:.25s;
+    z-index:50; white-space:nowrap;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  .confirm-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.55);
+    display:none; align-items:flex-end; justify-content:center; z-index:60;
+  }
+  .confirm-overlay.show{display:flex;}
+  .confirm-sheet{
+    background:var(--card); border-radius:20px 20px 0 0;
+    width:100%; max-width:500px; padding:22px 20px calc(20px + env(safe-area-inset-bottom));
+  }
+  .confirm-sheet h3{margin:0 0 6px; font-size:16px;}
+  .confirm-sheet p{margin:0 0 18px; font-size:13px; color:var(--text-dim); line-height:1.5;}
+  .confirm-row{display:flex; gap:10px;}
+  .confirm-row button{flex:1; padding:14px; border-radius:12px; border:none; font-size:14px; font-weight:700; cursor:pointer;}
+  .confirm-row .cancel{background:var(--card-2); color:var(--text);}
+  .confirm-row .ok{background:var(--accent); color:#0c1410;}
 </style>
 </head>
 <body>
-<div class="card">
-<h1>✅ Checklist Diário</h1>
-<div id="list"></div>
-<div class="progress"><div class="bar" id="bar"></div></div>
-<p id="percent">0% concluído</p>
-<div class="buttons">
-<button class="reset" onclick="resetAll()">Limpar tudo</button>
+
+<div class="topbar">
+  <h1>🌤️ <span id="greeting">Rotina</span></h1>
+  <span class="date" id="todayLabel"></span>
 </div>
+
+<div class="tabs">
+  <div class="tab active" data-screen="checklist">Hoje</div>
+  <div class="tab" data-screen="stats">Estatísticas</div>
 </div>
+
+<!-- TELA 1: CHECKLIST -->
+<div class="screen active" id="screen-checklist">
+  <div class="progress-wrap">
+    <div class="progress-row">
+      <span class="progress-pct" id="pct">0%</span>
+      <span class="progress-label" id="pctLabel">0 de 0 concluídas</span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="bar"></div></div>
+  </div>
+
+  <div id="list"></div>
+</div>
+
+<!-- TELA 2: ESTATÍSTICAS -->
+<div class="screen" id="screen-stats">
+  <div id="statsContent"></div>
+</div>
+
+<div class="finish-btn" id="finishWrap">
+  <button id="finishBtn">Finalizar dia</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-sheet">
+    <h3 id="confirmTitle">Finalizar o dia?</h3>
+    <p id="confirmText">Isso salva o progresso de hoje no histórico e zera o checklist para amanhã.</p>
+    <div class="confirm-row">
+      <button class="cancel" id="confirmCancel">Cancelar</button>
+      <button class="ok" id="confirmOk">Finalizar</button>
+    </div>
+  </div>
+</div>
+
 <script>
-const tasks=[
-["06:45","⏰ Acordar"],["06:45","🪥 Escovar os dentes"],["06:55","👕 Vestir"],
-["07:00","🐾 Limpar as caixas"],["07:10","👟 Correr/Academia/Outro"],
-["08:10","🚿 Tomar banho"],["08:25","☕ Tomar café"],["08:45","🛏️ Arrumar a cama"],
-["08:50","💻 Iniciar trabalho"],["","💧 Tomar água"],["12:00","↘️ Sair para o intervalo"],
-["","🎮 Jogar/Rec"],["12:30","🔥 Fazer almoço"],["13:00","🍴 Almoçar"],
-["13:15","🧼 Lavar a louça"],["13:35","↖️ Voltar à trabalhar"],
-["15:00","🍀 Fazer chimarrão"],["16:00","🍪 Lanche da tarde"],
-["18:30","🔽 Sair do trabalho"],["","❤️ Tempo de qualidade"],
-["19:30","🛒 Ir no mercado"],["20:00","🔥 Fazer a Janta"],
-["20:30","🍴 Jantar"],["21:00","🧼 Lavar a louça"],
-["21:20","🧹 Varrer o chão"],["21:40","🚿 Tomar banho"],
-["21:55","🛋️ Arrumar a sala"],["22:05","💤 Dormir"]
+/* ======================== CONFIG ======================== */
+const TASKS = [
+  ["06:45","⏰","Acordar"],["06:45","🪥","Escovar os dentes"],["06:55","👕","Vestir"],
+  ["07:00","🐾","Limpar as caixas"],["07:10","👟","Correr/Academia/Outro"],
+  ["08:10","🚿","Tomar banho"],["08:25","☕","Tomar café"],["08:45","🛏️","Arrumar a cama"],
+  ["08:50","💻","Iniciar trabalho"],["","💧","Tomar água"],["12:00","↘️","Sair para o intervalo"],
+  ["","🎮","Jogar/Rec"],["12:30","🔥","Fazer almoço"],["13:00","🍴","Almoçar"],
+  ["13:15","🧼","Lavar a louça"],["13:35","↖️","Voltar à trabalhar"],
+  ["15:00","🍀","Fazer chimarrão"],["16:00","🍪","Lanche da tarde"],
+  ["18:30","🔽","Sair do trabalho"],["","❤️","Tempo de qualidade"],
+  ["19:30","🛒","Ir no mercado"],["20:00","🔥","Fazer a Janta"],
+  ["20:30","🍴","Jantar"],["21:00","🧼","Lavar a louça"],
+  ["21:20","🧹","Varrer o chão"],["21:40","🚿","Tomar banho"],
+  ["21:55","🛋️","Arrumar a sala"],["22:05","💤","Dormir"]
 ];
-const list=document.getElementById("list");
-tasks.forEach((t,i)=>{
-list.innerHTML+=`<div class="item"><span class="time">${t[0]}</span><label><input type="checkbox" onchange="update()"> ${t[1]}</label></div>`;
+const MAX_WEEKS = 8;
+const MAX_DAYS = MAX_WEEKS * 7;
+const STORAGE_TODAY = "routine_today_v1";
+const STORAGE_HISTORY = "routine_history_v1";
+const WEEKDAY_NAMES = ["dom","seg","ter","qua","qui","sex","sáb"];
+
+/* ======================== STATE ======================== */
+function todayKey(){
+  const d = new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+
+function loadToday(){
+  const raw = localStorage.getItem(STORAGE_TODAY);
+  if(!raw) return { date: todayKey(), checked: TASKS.map(()=>false) };
+  const data = JSON.parse(raw);
+  // se mudou o dia (ex: app ficou aberto passando da meia-noite), reseta sem salvar histórico automaticamente
+  if(data.date !== todayKey()){
+    return { date: todayKey(), checked: TASKS.map(()=>false) };
+  }
+  // se o número de tarefas mudou (usuário editou TASKS), reajusta
+  if(data.checked.length !== TASKS.length){
+    const adjusted = TASKS.map((_,i)=> data.checked[i] ?? false);
+    data.checked = adjusted;
+  }
+  return data;
+}
+
+function saveToday(){
+  localStorage.setItem(STORAGE_TODAY, JSON.stringify(state));
+}
+
+function loadHistory(){
+  const raw = localStorage.getItem(STORAGE_HISTORY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+function saveHistory(history){
+  localStorage.setItem(STORAGE_HISTORY, JSON.stringify(history));
+}
+
+let state = loadToday();
+
+/* ======================== CHECKLIST RENDER ======================== */
+const listEl = document.getElementById("list");
+
+function renderList(){
+  listEl.innerHTML = "";
+  TASKS.forEach((t,i)=>{
+    const [time, emoji, label] = t;
+    const checked = state.checked[i];
+    const item = document.createElement("div");
+    item.className = "item" + (checked ? " done" : "");
+    item.innerHTML = `
+      <span class="time">${time || ""}</span>
+      <span class="label">${emoji} ${label}</span>
+      <div class="checkbox ${checked ? "checked" : ""}" data-i="${i}">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      </div>
+    `;
+    listEl.appendChild(item);
+  });
+  listEl.querySelectorAll(".checkbox").forEach(cb=>{
+    cb.addEventListener("click", ()=>{
+      const i = parseInt(cb.dataset.i);
+      state.checked[i] = !state.checked[i];
+      saveToday();
+      renderList();
+      updateProgress();
+    });
+  });
+}
+
+function updateProgress(){
+  const total = TASKS.length;
+  const done = state.checked.filter(Boolean).length;
+  const pct = total ? Math.round(done/total*100) : 0;
+  document.getElementById("bar").style.width = pct + "%";
+  document.getElementById("pct").innerText = pct + "%";
+  document.getElementById("pctLabel").innerText = `${done} de ${total} concluídas`;
+
+  const finishBtn = document.getElementById("finishBtn");
+  if(pct === 100){
+    finishBtn.textContent = "Finalizar dia 🎉";
+  } else {
+    finishBtn.textContent = "Finalizar dia";
+  }
+}
+
+function updateGreeting(){
+  const h = new Date().getHours();
+  let g = "Boa noite";
+  if(h < 12) g = "Bom dia";
+  else if(h < 18) g = "Boa tarde";
+  document.getElementById("greeting").innerText = g;
+
+  const d = new Date();
+  const opts = { weekday: 'short', day: 'numeric', month: 'short' };
+  document.getElementById("todayLabel").innerText = d.toLocaleDateString('pt-BR', opts);
+}
+
+/* ======================== FINALIZAR DIA ======================== */
+const overlay = document.getElementById("confirmOverlay");
+document.getElementById("finishBtn").addEventListener("click", ()=>{
+  const total = TASKS.length;
+  const done = state.checked.filter(Boolean).length;
+  const pct = Math.round(done/total*100);
+  const text = document.getElementById("confirmText");
+  if(pct < 100){
+    text.innerText = `Você concluiu ${pct}% de hoje. Isso vai pro histórico e o checklist reinicia para amanhã.`;
+  } else {
+    text.innerText = `Mandou bem, 100% concluído! Isso vai pro histórico e o checklist reinicia para amanhã.`;
+  }
+  overlay.classList.add("show");
 });
-function update(){
-const total=document.querySelectorAll("input").length;
-const done=document.querySelectorAll("input:checked").length;
-const pct=Math.round(done/total*100);
-document.getElementById("bar").style.width=pct+"%";
-document.getElementById("percent").innerText=pct+"% concluído";
-localStorage.setItem("checklist",JSON.stringify([...document.querySelectorAll("input")].map(x=>x.checked)));
+
+document.getElementById("confirmCancel").addEventListener("click", ()=>{
+  overlay.classList.remove("show");
+});
+
+document.getElementById("confirmOk").addEventListener("click", ()=>{
+  finishDay();
+  overlay.classList.remove("show");
+});
+
+function finishDay(){
+  const total = TASKS.length;
+  const done = state.checked.filter(Boolean).length;
+  const pct = total ? Math.round(done/total*100) : 0;
+
+  let history = loadHistory();
+  // se já existe um registro pra hoje (re-finalizou no mesmo dia), substitui
+  history = history.filter(h => h.date !== state.date);
+  history.push({
+    date: state.date,
+    weekday: new Date(state.date + "T12:00:00").getDay(),
+    pct: pct,
+    checked: state.checked.slice()
+  });
+  // mantém só os últimos MAX_DAYS
+  history.sort((a,b)=> a.date.localeCompare(b.date));
+  if(history.length > MAX_DAYS){
+    history = history.slice(history.length - MAX_DAYS);
+  }
+  saveHistory(history);
+
+  // reseta o dia
+  state = { date: todayKey(), checked: TASKS.map(()=>false) };
+  saveToday();
+  renderList();
+  updateProgress();
+  showToast("Dia finalizado e salvo ✓");
+  renderStats();
 }
-function resetAll(){
-document.querySelectorAll("input").forEach(x=>x.checked=false);
-update();
+
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.innerText = msg;
+  t.classList.add("show");
+  setTimeout(()=> t.classList.remove("show"), 2200);
 }
-const saved=JSON.parse(localStorage.getItem("checklist")||"[]");
-document.querySelectorAll("input").forEach((x,i)=>x.checked=saved[i]||false);
-update();
+
+/* ======================== TABS ======================== */
+document.querySelectorAll(".tab").forEach(tab=>{
+  tab.addEventListener("click", ()=>{
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById("screen-"+tab.dataset.screen).classList.add("active");
+    document.getElementById("finishWrap").style.display = tab.dataset.screen === "checklist" ? "block" : "none";
+    if(tab.dataset.screen === "stats") renderStats();
+  });
+});
+
+/* ======================== ESTATÍSTICAS ======================== */
+function renderStats(){
+  const history = loadHistory();
+  const container = document.getElementById("statsContent");
+
+  if(history.length === 0){
+    container.innerHTML = `
+      <div class="empty-state">
+        <span class="emoji">📊</span>
+        <p>Ainda não há dias finalizados.<br>Complete e finalize um dia para começar a ver suas estatísticas aqui.</p>
+      </div>
+    `;
+    return;
+  }
+
+  // últimos 7 dias corridos (para o gráfico semanal), preenchendo dias sem registro
+  const last7 = [];
+  for(let i=6; i>=0; i--){
+    const d = new Date();
+    d.setDate(d.getDate()-i);
+    const key = d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+    const rec = history.find(h=>h.date===key);
+    last7.push({ date:key, weekday: d.getDay(), pct: rec ? rec.pct : null });
+  }
+
+  const avgPct = Math.round(history.reduce((s,h)=>s+h.pct,0) / history.length);
+  const bestDay = history.reduce((a,b)=> b.pct > a.pct ? b : a);
+  const worstDay = history.reduce((a,b)=> b.pct < a.pct ? b : a);
+  const daysLogged = history.length;
+
+  // ranking de tarefas: % de vezes que cada tarefa foi concluída
+  const taskCounts = TASKS.map(()=>0);
+  history.forEach(h=>{
+    h.checked.forEach((c,i)=>{ if(c && i < taskCounts.length) taskCounts[i]++; });
+  });
+  const taskStats = TASKS.map((t,i)=>({
+    label: `${t[1]} ${t[2]}`,
+    pct: Math.round((taskCounts[i] / history.length) * 100)
+  })).sort((a,b)=> b.pct - a.pct);
+
+  const topTasks = taskStats.slice(0,5);
+  const bottomTasks = taskStats.slice(-5).reverse();
+
+  let html = `
+    <div class="stat-cards">
+      <div class="stat-card">
+        <div class="num">${avgPct}%</div>
+        <div class="lbl">MÉDIA GERAL</div>
+      </div>
+      <div class="stat-card">
+        <div class="num">${daysLogged}</div>
+        <div class="lbl">DIAS REGISTRADOS</div>
+      </div>
+      <div class="stat-card">
+        <div class="num">${bestDay.pct}%</div>
+        <div class="lbl">MELHOR DIA (${formatShortDate(bestDay.date)})</div>
+      </div>
+      <div class="stat-card">
+        <div class="num">${worstDay.pct}%</div>
+        <div class="lbl">DIA MAIS BAIXO (${formatShortDate(worstDay.date)})</div>
+      </div>
+    </div>
+
+    <div class="rank-title">Últimos 7 dias</div>
+    <div class="week-row">
+      ${last7.map(d=>`
+        <div class="day-col">
+          <div class="day-bar-track">
+            <div class="day-bar-fill ${d.pct===null ? 'empty' : ''}" style="height:${d.pct===null ? 4 : Math.max(d.pct,4)}%"></div>
+          </div>
+          <span class="day-name">${WEEKDAY_NAMES[d.weekday]}</span>
+          <span class="day-pct">${d.pct===null ? '–' : d.pct+'%'}</span>
+        </div>
+      `).join("")}
+    </div>
+
+    <div class="rank-title">Tarefas mais cumpridas</div>
+    ${topTasks.map(t=>`
+      <div class="rank-item good">
+        <span class="rlabel">${t.label}</span>
+        <div class="rbar-track"><div class="rbar-fill" style="width:${t.pct}%"></div></div>
+        <span class="rpct">${t.pct}%</span>
+      </div>
+    `).join("")}
+
+    <div class="rank-title" style="margin-top:24px;">Tarefas mais deixadas de lado</div>
+    ${bottomTasks.map(t=>`
+      <div class="rank-item bad">
+        <span class="rlabel">${t.label}</span>
+        <div class="rbar-track"><div class="rbar-fill" style="width:${t.pct}%"></div></div>
+        <span class="rpct">${t.pct}%</span>
+      </div>
+    `).join("")}
+  `;
+
+  container.innerHTML = html;
+}
+
+function formatShortDate(dateStr){
+  const d = new Date(dateStr + "T12:00:00");
+  return d.toLocaleDateString('pt-BR', { day:'numeric', month:'short' });
+}
+
+/* ======================== INIT ======================== */
+updateGreeting();
+renderList();
+updateProgress();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
 </script>
 </body>
 </html>
