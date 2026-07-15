@@ -66,10 +66,6 @@
   .progress-bar{height:10px; background:var(--card-2); border-radius:20px; overflow:hidden;}
   .progress-fill{height:100%; width:0%; background:linear-gradient(90deg,var(--accent-dim),var(--accent)); transition:width .35s ease; border-radius:20px;}
 
-  .group-label{
-    font-size:11px; text-transform:uppercase; letter-spacing:.08em;
-    color:var(--text-dim); margin:22px 2px 8px; font-weight:700;
-  }
   .item{
     display:flex; align-items:center; gap:12px;
     background:var(--card); border-radius:14px;
@@ -106,10 +102,8 @@
     transition:.15s;
   }
   .finish-btn button:active{transform:scale(.98);}
-  .finish-btn button.done-today{background:var(--card-2); color:var(--text-dim); border:1px solid var(--line);}
 
   /* ---- STATS ---- */
-  .stat-section{margin-top:8px;}
   .stat-cards{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:24px;}
   .stat-card{
     background:var(--card); border:1px solid var(--line);
@@ -122,7 +116,7 @@
   .day-col{flex:1; display:flex; flex-direction:column; align-items:center; gap:6px;}
   .day-bar-track{
     width:100%; height:90px; background:var(--card-2); border-radius:8px;
-    display:flex; align-items:flex-end; overflow:hidden; position:relative;
+    display:flex; align-items:flex-end; overflow:hidden;
   }
   .day-bar-fill{width:100%; background:var(--accent); border-radius:8px 8px 0 0; transition:height .3s;}
   .day-bar-fill.empty{background:var(--line);}
@@ -160,6 +154,46 @@
   }
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
 
+  /* banner de auto-save */
+  .autosave-banner{
+    background:var(--card-2); border:1px solid var(--accent-dim);
+    border-radius:14px; padding:13px 16px; margin-bottom:14px;
+    font-size:13px; line-height:1.5; color:var(--text-dim);
+    display:none;
+  }
+  .autosave-banner strong{color:var(--accent); display:block; margin-bottom:2px; font-size:14px;}
+
+  /* ---- POPUP BOM DIA ---- */
+  .goodmorning-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.65);
+    display:none; align-items:center; justify-content:center;
+    z-index:70; padding:24px;
+  }
+  .goodmorning-overlay.show{display:flex;}
+  .goodmorning-sheet{
+    background:var(--card); border-radius:24px;
+    width:100%; max-width:380px;
+    padding:32px 24px 24px;
+    text-align:center;
+    border:1px solid var(--line);
+  }
+  .goodmorning-sheet .gm-emoji{font-size:42px; margin-bottom:14px; display:block;}
+  .goodmorning-sheet .gm-title{
+    font-size:13px; text-transform:uppercase; letter-spacing:.1em;
+    color:var(--text-dim); font-weight:700; margin-bottom:18px;
+  }
+  .goodmorning-sheet .gm-quote{
+    font-size:20px; font-weight:700; line-height:1.4;
+    color:var(--text); margin-bottom:28px;
+    min-height:60px;
+  }
+  .goodmorning-sheet .gm-btn{
+    width:100%; padding:15px; border:none; border-radius:14px;
+    font-size:15px; font-weight:700; cursor:pointer;
+    background:var(--accent); color:#0c1410;
+  }
+  .goodmorning-sheet .gm-btn:active{transform:scale(.98);}
+
   .confirm-overlay{
     position:fixed; inset:0; background:rgba(0,0,0,.55);
     display:none; align-items:flex-end; justify-content:center; z-index:60;
@@ -191,6 +225,11 @@
 
 <!-- TELA 1: CHECKLIST -->
 <div class="screen active" id="screen-checklist">
+  <div class="autosave-banner" id="autosaveBanner">
+    <strong>Dia anterior salvo automaticamente ✓</strong>
+    O checklist de ontem foi registrado no histórico com o progresso que estava marcado.
+  </div>
+
   <div class="progress-wrap">
     <div class="progress-row">
       <span class="progress-pct" id="pct">0%</span>
@@ -212,6 +251,16 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- POPUP BOM DIA -->
+<div class="goodmorning-overlay" id="gmOverlay">
+  <div class="goodmorning-sheet">
+    <span class="gm-emoji">🌤️</span>
+    <div class="gm-title">Bom dia, Cássio</div>
+    <div class="gm-quote" id="gmQuote"></div>
+    <button class="gm-btn" id="gmBtn">Vamos lá 💪</button>
+  </div>
+</div>
 
 <div class="confirm-overlay" id="confirmOverlay">
   <div class="confirm-sheet">
@@ -246,25 +295,22 @@ const STORAGE_TODAY = "routine_today_v1";
 const STORAGE_HISTORY = "routine_history_v1";
 const WEEKDAY_NAMES = ["dom","seg","ter","qua","qui","sex","sáb"];
 
-/* ======================== STATE ======================== */
+/* ======================== UTILS ======================== */
 function todayKey(){
   const d = new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
 
+function formatShortDate(dateStr){
+  const d = new Date(dateStr + "T12:00:00");
+  return d.toLocaleDateString('pt-BR', { day:'numeric', month:'short' });
+}
+
+/* ======================== STORAGE ======================== */
 function loadToday(){
   const raw = localStorage.getItem(STORAGE_TODAY);
   if(!raw) return { date: todayKey(), checked: TASKS.map(()=>false) };
   const data = JSON.parse(raw);
-  // se mudou o dia (ex: app ficou aberto passando da meia-noite), reseta sem salvar histórico automaticamente
-  if(data.date !== todayKey()){
-    return { date: todayKey(), checked: TASKS.map(()=>false) };
-  }
-  // se o número de tarefas mudou (usuário editou TASKS), reajusta
-  if(data.checked.length !== TASKS.length){
-    const adjusted = TASKS.map((_,i)=> data.checked[i] ?? false);
-    data.checked = adjusted;
-  }
   return data;
 }
 
@@ -281,7 +327,41 @@ function saveHistory(history){
   localStorage.setItem(STORAGE_HISTORY, JSON.stringify(history));
 }
 
+/* ======================== AUTO-SAVE DIA ANTERIOR ======================== */
+function autoSavePreviousDay(previousState){
+  const total = TASKS.length;
+  const done = previousState.checked.filter(Boolean).length;
+  const pct = total ? Math.round(done/total*100) : 0;
+
+  let history = loadHistory();
+  history = history.filter(h => h.date !== previousState.date);
+  history.push({
+    date: previousState.date,
+    weekday: new Date(previousState.date + "T12:00:00").getDay(),
+    pct: pct,
+    checked: previousState.checked.slice()
+  });
+  history.sort((a,b)=> a.date.localeCompare(b.date));
+  if(history.length > MAX_DAYS) history = history.slice(history.length - MAX_DAYS);
+  saveHistory(history);
+}
+
+/* ======================== INICIALIZAÇÃO ======================== */
 let state = loadToday();
+let showedAutosaveBanner = false;
+
+// Se mudou o dia desde o último uso, salva o dia anterior automaticamente
+if(state.date !== todayKey()){
+  // só salva se havia algo registrado (evita salvar dias "em branco" por inatividade)
+  const hadActivity = state.checked.some(Boolean);
+  if(hadActivity){
+    autoSavePreviousDay(state);
+    showedAutosaveBanner = true;
+  }
+  // reseta pro novo dia
+  state = { date: todayKey(), checked: TASKS.map(()=>false) };
+  saveToday();
+}
 
 /* ======================== CHECKLIST RENDER ======================== */
 const listEl = document.getElementById("list");
@@ -320,13 +400,7 @@ function updateProgress(){
   document.getElementById("bar").style.width = pct + "%";
   document.getElementById("pct").innerText = pct + "%";
   document.getElementById("pctLabel").innerText = `${done} de ${total} concluídas`;
-
-  const finishBtn = document.getElementById("finishBtn");
-  if(pct === 100){
-    finishBtn.textContent = "Finalizar dia 🎉";
-  } else {
-    finishBtn.textContent = "Finalizar dia";
-  }
+  document.getElementById("finishBtn").textContent = pct === 100 ? "Finalizar dia 🎉" : "Finalizar dia";
 }
 
 function updateGreeting(){
@@ -335,24 +409,21 @@ function updateGreeting(){
   if(h < 12) g = "Bom dia";
   else if(h < 18) g = "Boa tarde";
   document.getElementById("greeting").innerText = g;
-
   const d = new Date();
-  const opts = { weekday: 'short', day: 'numeric', month: 'short' };
-  document.getElementById("todayLabel").innerText = d.toLocaleDateString('pt-BR', opts);
+  document.getElementById("todayLabel").innerText = d.toLocaleDateString('pt-BR', { weekday:'short', day:'numeric', month:'short' });
 }
 
-/* ======================== FINALIZAR DIA ======================== */
+/* ======================== FINALIZAR DIA (manual) ======================== */
 const overlay = document.getElementById("confirmOverlay");
+
 document.getElementById("finishBtn").addEventListener("click", ()=>{
   const total = TASKS.length;
   const done = state.checked.filter(Boolean).length;
   const pct = Math.round(done/total*100);
   const text = document.getElementById("confirmText");
-  if(pct < 100){
-    text.innerText = `Você concluiu ${pct}% de hoje. Isso vai pro histórico e o checklist reinicia para amanhã.`;
-  } else {
-    text.innerText = `Mandou bem, 100% concluído! Isso vai pro histórico e o checklist reinicia para amanhã.`;
-  }
+  text.innerText = pct < 100
+    ? `Você concluiu ${pct}% de hoje. Isso vai pro histórico e o checklist reinicia para amanhã.`
+    : `Mandou bem, 100% concluído! Isso vai pro histórico e o checklist reinicia para amanhã.`;
   overlay.classList.add("show");
 });
 
@@ -366,40 +437,23 @@ document.getElementById("confirmOk").addEventListener("click", ()=>{
 });
 
 function finishDay(){
-  const total = TASKS.length;
-  const done = state.checked.filter(Boolean).length;
-  const pct = total ? Math.round(done/total*100) : 0;
-
-  let history = loadHistory();
-  // se já existe um registro pra hoje (re-finalizou no mesmo dia), substitui
-  history = history.filter(h => h.date !== state.date);
-  history.push({
-    date: state.date,
-    weekday: new Date(state.date + "T12:00:00").getDay(),
-    pct: pct,
-    checked: state.checked.slice()
-  });
-  // mantém só os últimos MAX_DAYS
-  history.sort((a,b)=> a.date.localeCompare(b.date));
-  if(history.length > MAX_DAYS){
-    history = history.slice(history.length - MAX_DAYS);
-  }
-  saveHistory(history);
-
-  // reseta o dia
+  autoSavePreviousDay(state); // reutiliza a mesma função
   state = { date: todayKey(), checked: TASKS.map(()=>false) };
   saveToday();
   renderList();
   updateProgress();
   showToast("Dia finalizado e salvo ✓");
   renderStats();
+  // esconde o banner de auto-save se estiver visível (finalizou manualmente agora)
+  document.getElementById("autosaveBanner").style.display = "none";
 }
 
+/* ======================== TOAST ======================== */
 function showToast(msg){
   const t = document.getElementById("toast");
   t.innerText = msg;
   t.classList.add("show");
-  setTimeout(()=> t.classList.remove("show"), 2200);
+  setTimeout(()=> t.classList.remove("show"), 2500);
 }
 
 /* ======================== TABS ======================== */
@@ -429,7 +483,6 @@ function renderStats(){
     return;
   }
 
-  // últimos 7 dias corridos (para o gráfico semanal), preenchendo dias sem registro
   const last7 = [];
   for(let i=6; i>=0; i--){
     const d = new Date();
@@ -442,9 +495,7 @@ function renderStats(){
   const avgPct = Math.round(history.reduce((s,h)=>s+h.pct,0) / history.length);
   const bestDay = history.reduce((a,b)=> b.pct > a.pct ? b : a);
   const worstDay = history.reduce((a,b)=> b.pct < a.pct ? b : a);
-  const daysLogged = history.length;
 
-  // ranking de tarefas: % de vezes que cada tarefa foi concluída
   const taskCounts = TASKS.map(()=>0);
   history.forEach(h=>{
     h.checked.forEach((c,i)=>{ if(c && i < taskCounts.length) taskCounts[i]++; });
@@ -457,14 +508,14 @@ function renderStats(){
   const topTasks = taskStats.slice(0,5);
   const bottomTasks = taskStats.slice(-5).reverse();
 
-  let html = `
+  container.innerHTML = `
     <div class="stat-cards">
       <div class="stat-card">
         <div class="num">${avgPct}%</div>
         <div class="lbl">MÉDIA GERAL</div>
       </div>
       <div class="stat-card">
-        <div class="num">${daysLogged}</div>
+        <div class="num">${history.length}</div>
         <div class="lbl">DIAS REGISTRADOS</div>
       </div>
       <div class="stat-card">
@@ -508,19 +559,63 @@ function renderStats(){
       </div>
     `).join("")}
   `;
-
-  container.innerHTML = html;
 }
 
-function formatShortDate(dateStr){
-  const d = new Date(dateStr + "T12:00:00");
-  return d.toLocaleDateString('pt-BR', { day:'numeric', month:'short' });
+/* ======================== POPUP BOM DIA ======================== */
+const QUOTES = [
+  "Faça a próxima coisa.",
+  "Disciplina é fazer aquilo que você não quer.",
+  "Deixe o amor reinar sobre você.",
+  "Não pense nisso.",
+  "Levante, não importa quantas vezes você caiu.",
+  "Se você tivesse desistido, tudo estaria muito pior. Continue!",
+  "Um dia de cada vez. Hoje é suficiente.",
+  "Você não precisa de motivação. Você precisa de movimento.",
+  "Feito é melhor que perfeito.",
+  "O segredo é começar.",
+  "Cada pequeno hábito é um voto na pessoa que você quer ser.",
+  "Você já passou por dias difíceis antes. Este também vai passar.",
+  "Não espere se sentir pronto.",
+  "Progresso, não perfeição.",
+  "O esforço de hoje é o resultado de amanhã.",
+  "Você é mais forte do que pensa.",
+  "Confie no processo.",
+  "Cuide do seu corpo como se fosse morar nele pelo resto da vida.",
+  "Silêncio, foco, entrega.",
+  "A versão de você de amanhã vai agradecer.",
+  "Não quebre a corrente.",
+  "Bom dia. Agora vai.",
+  "O que você faz todo dia importa mais do que o que você faz de vez em quando.",
+  "Seja a pessoa que o seu eu do passado precisava.",
+  "Movimento cria motivação, não o contrário.",
+  "Você escolheu estar aqui. Honre isso."
+];
+
+const STORAGE_LAST_GM = "routine_last_goodmorning";
+
+function maybeShowGoodMorning(){
+  const lastShown = localStorage.getItem(STORAGE_LAST_GM);
+  const today = todayKey();
+  if(lastShown === today) return; // já mostrou hoje
+  const quote = QUOTES[Math.floor(Math.random() * QUOTES.length)];
+  document.getElementById("gmQuote").innerText = `"${quote}"`;
+  document.getElementById("gmOverlay").classList.add("show");
+  localStorage.setItem(STORAGE_LAST_GM, today);
 }
+
+document.getElementById("gmBtn").addEventListener("click", ()=>{
+  document.getElementById("gmOverlay").classList.remove("show");
+});
 
 /* ======================== INIT ======================== */
 updateGreeting();
 renderList();
 updateProgress();
+maybeShowGoodMorning();
+
+if(showedAutosaveBanner){
+  document.getElementById("autosaveBanner").style.display = "block";
+}
 
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
